@@ -32,7 +32,7 @@ object Velocity : Module("Velocity", ModuleCategory.COMBAT) {
      * OPTIONS
      */
     private val mode by ListValue("Mode", arrayOf("Simple", "AAC", "AACPush", "AACZero", "AACv4",
-        "Reverse", "SmoothReverse", "Jump", "Glitch", "Legit"), "Simple")
+        "Reverse", "SmoothReverse", "Jump", "Glitch", "Legit","Grim" ), "Simple")
 
     private val horizontal by FloatValue("Horizontal", 0F, 0F..1F) { mode in arrayOf("Simple", "AAC", "Legit") }
     private val vertical by FloatValue("Vertical", 0F, 0F..1F) { mode in arrayOf("Simple", "Legit") }
@@ -63,6 +63,16 @@ object Velocity : Module("Velocity", ModuleCategory.COMBAT) {
 
     // AACPush
     private var jump = false
+
+    // Grim
+    private var cancelPacket = 6
+    private var resetPersec = 8
+    private var grimTcancel = 0
+    private var updates = 0
+
+        override fun onDisable() {
+            grimTcancel = 0
+        }
 
     override val tag
         get() = mode
@@ -188,6 +198,17 @@ object Velocity : Module("Velocity", ModuleCategory.COMBAT) {
                     thePlayer.motionX *= horizontal.toDouble()
                     thePlayer.motionZ *= horizontal.toDouble()
                     thePlayer.motionY *= vertical.toDouble()
+
+            "grim" -> {
+                if (resetPersec > 0) {
+                    if (updates >= || updates >= resetParsec ) {
+                        updates = 0
+                        if (grimTcancel = >0) {
+                            grimTcancel--
+                        }
+                    }
+                }
+                    }
                 }
             }
         }
