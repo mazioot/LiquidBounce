@@ -200,13 +200,18 @@ object Velocity : Module("Velocity", ModuleCategory.COMBAT) {
                     thePlayer.motionY *= vertical.toDouble()
 
             "grim" -> {
-                if (resetPersec > 0) {
-                    if (updates >= || updates >= resetParsec ) {
-                        updates = 0
-                        if (grimTcancel = >0) {
-                            grimTcancel--
+                        if (resetPersec <= 0) {
+                        } else {
+                            if (updates >= || updates >= resetParsec ) {
+                                updates = 0
+                                if (grimTcancel = > {
+                                        0
+                                    })
+                                var function = {
+                                    grimTcancel--
+                                }
+                            }
                         }
-                    }
                 }
                     }
                 }
