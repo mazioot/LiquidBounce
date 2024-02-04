@@ -54,9 +54,9 @@ import net.ccbluex.liquidbounce.features.module.modules.render.minimap.ModuleMin
 import net.ccbluex.liquidbounce.features.module.modules.render.nametags.ModuleNametags
 import net.ccbluex.liquidbounce.features.module.modules.world.*
 import net.ccbluex.liquidbounce.features.module.modules.world.autoFarm.ModuleAutoFarm
-import net.ccbluex.liquidbounce.features.module.modules.combat.crystalAura.ModuleCrystalAura
+import net.ccbluex.liquidbounce.features.module.modules.world.crystalAura.ModuleCrystalAura
 import net.ccbluex.liquidbounce.features.module.modules.world.scaffold.ModuleScaffold
-import net.ccbluex.liquidbounce.script.ScriptApi
+import net.ccbluex.liquidbounce.script.RequiredByScript
 import org.lwjgl.glfw.GLFW
 
 private val modules = mutableListOf<Module>()
@@ -107,12 +107,13 @@ object ModuleManager : Listenable, Iterable<Module> by modules {
             ModuleVelocity,
             ModuleBacktrack,
             ModuleSwordBlock,
-            ModuleAutoShoot,
+            ModuleAutoBalls,
 
             // Exploit
             ModuleAbortBreaking,
             ModuleAntiReducedDebugInfo,
             ModuleAntiVanish,
+            ModuleAntiHunger,
             ModuleClip,
             ModuleDamage,
             ModuleDisabler,
@@ -264,8 +265,7 @@ object ModuleManager : Listenable, Iterable<Module> by modules {
             ModuleRichPresence,
             ModuleCapeTransfer,
             ModuleHideClient,
-            ModuleEnemies,
-            ModuleLiquidChat
+            ModuleEnemies
         )
 
         builtin.apply {
@@ -315,11 +315,11 @@ object ModuleManager : Listenable, Iterable<Module> by modules {
      * This is being used by UltralightJS for the implementation of the ClickGUI. DO NOT REMOVE!
      */
     @JvmName("getCategories")
-    @ScriptApi
+    @RequiredByScript
     fun getCategories() = Category.values().map { it.readableName }.toTypedArray()
 
     @JvmName("getModuleByName")
-    @ScriptApi
+    @RequiredByScript
     fun getModuleByName(module: String) = find { it.name.equals(module, true) }
 
     operator fun get(moduleName: String) = modules.find { it.name.equals(moduleName, true) }
