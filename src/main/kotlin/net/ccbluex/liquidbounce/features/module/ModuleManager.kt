@@ -16,312 +16,75 @@
  * You should have received a copy of the GNU General Public License
  * along with LiquidBounce. If not, see <https://www.gnu.org/licenses/>.
  */
-package net.ccbluex.liquidbounce.features.module
+package net.ccbluex.liquidbounce.features
 
-import net.ccbluex.liquidbounce.config.ConfigSystem
+import com.mojang.blaze3d.systems.RenderSystem
+import net.ccbluex.liquidbounce.authlib.account.AlteningAccount
+import net.ccbluex.liquidbounce.authlib.account.CrackedAccount
+import net.ccbluex.liquidbounce.authlib.account.MicrosoftAccount
 import net.ccbluex.liquidbounce.event.Listenable
-import net.ccbluex.liquidbounce.event.events.KeyEvent
-import net.ccbluex.liquidbounce.event.events.WorldChangeEvent
+import net.ccbluex.liquidbounce.event.events.ServerConnectEvent
 import net.ccbluex.liquidbounce.event.handler
-import net.ccbluex.liquidbounce.features.module.modules.client.*
-import net.ccbluex.liquidbounce.features.module.modules.combat.*
-import net.ccbluex.liquidbounce.features.module.modules.combat.killaura.ModuleKillAura
-import net.ccbluex.liquidbounce.features.module.modules.exploit.*
-import net.ccbluex.liquidbounce.features.module.modules.exploit.servercrasher.ModuleServerCrasher
-import net.ccbluex.liquidbounce.features.module.modules.`fun`.ModuleDankBobbing
-import net.ccbluex.liquidbounce.features.module.modules.`fun`.ModuleDerp
-import net.ccbluex.liquidbounce.features.module.modules.`fun`.ModuleHandDerp
-import net.ccbluex.liquidbounce.features.module.modules.`fun`.ModuleSkinDerp
-import net.ccbluex.liquidbounce.features.module.modules.misc.*
-import net.ccbluex.liquidbounce.features.module.modules.misc.antibot.ModuleAntiBot
-import net.ccbluex.liquidbounce.features.module.modules.movement.*
-import net.ccbluex.liquidbounce.features.module.modules.movement.autododge.ModuleAutoDodge
-import net.ccbluex.liquidbounce.features.module.modules.movement.fly.ModuleFly
-import net.ccbluex.liquidbounce.features.module.modules.movement.highjump.ModuleHighJump
-import net.ccbluex.liquidbounce.features.module.modules.movement.liquidwalk.ModuleLiquidWalk
-import net.ccbluex.liquidbounce.features.module.modules.movement.longjump.ModuleLongJump
-import net.ccbluex.liquidbounce.features.module.modules.movement.speed.ModuleSpeed
-import net.ccbluex.liquidbounce.features.module.modules.movement.step.ModuleReverseStep
-import net.ccbluex.liquidbounce.features.module.modules.movement.step.ModuleStep
-import net.ccbluex.liquidbounce.features.module.modules.movement.terrainspeed.ModuleTerrainSpeed
-import net.ccbluex.liquidbounce.features.module.modules.movement.ModuleVehicleControl
-import net.ccbluex.liquidbounce.features.module.modules.player.*
-import net.ccbluex.liquidbounce.features.module.modules.player.autoplay.ModuleAutoPlay
-import net.ccbluex.liquidbounce.features.module.modules.player.invcleaner.ModuleInventoryCleaner
-import net.ccbluex.liquidbounce.features.module.modules.player.nofall.ModuleNoFall
-import net.ccbluex.liquidbounce.features.module.modules.render.*
-import net.ccbluex.liquidbounce.features.module.modules.render.minimap.ModuleMinimap
-import net.ccbluex.liquidbounce.features.module.modules.render.nametags.ModuleNametags
-import net.ccbluex.liquidbounce.features.module.modules.world.*
-import net.ccbluex.liquidbounce.features.module.modules.world.autoFarm.ModuleAutoFarm
-import net.ccbluex.liquidbounce.features.module.modules.combat.crystalAura.ModuleCrystalAura
-import net.ccbluex.liquidbounce.features.module.modules.world.scaffold.ModuleScaffold
-import net.ccbluex.liquidbounce.script.ScriptApi
-import org.lwjgl.glfw.GLFW
+import net.ccbluex.liquidbounce.features.misc.AccountManager
+import net.ccbluex.liquidbounce.utils.client.mc
+import net.minecraft.client.gui.screen.TitleScreen
+import net.minecraft.client.gui.screen.multiplayer.ConnectScreen
+import net.minecraft.client.gui.screen.multiplayer.MultiplayerScreen
+import net.minecraft.client.network.ServerAddress
+import net.minecraft.client.network.ServerInfo
+import org.apache.commons.lang3.RandomStringUtils
 
-private val modules = mutableListOf<Module>()
+object Reconnect : Listenable {
 
-/**
- * A fairly simple module manager
- */
-object ModuleManager : Listenable, Iterable<Module> by modules {
+    private var lastServer: ServerInfo? = null
 
-    val modulesConfigurable = ConfigSystem.root("modules", modules)
+    val handleServerConnect = handler<ServerConnectEvent> {
+        lastServer = ServerInfo(it.serverName, it.serverAddress, ServerInfo.ServerType.OTHER)
+    }
 
     /**
-     * Handle key input for module binds
+     * Reconnects to the last server. This is safe to call from every thread since it records a render call and
+     * therefore runs in the Minecraft thread
      */
-    val keyHandler = handler<KeyEvent> { ev ->
-        if (ev.action == GLFW.GLFW_PRESS) {
-            filter { it.bind == ev.key.keyCode } // modules bound to a specific key
-                .forEach { it.enabled = !it.enabled } // toggle modules
+    fun reconnectNow() {
+        val serverInfo = lastServer ?: error("no known last server")
+        val serverAddress = ServerAddress.parse(serverInfo.address)
+
+        RenderSystem.recordRenderCall {
+            ConnectScreen.connect(MultiplayerScreen(TitleScreen()), mc, serverAddress, serverInfo, false)
         }
     }
 
-    val worldHandler = handler<WorldChangeEvent> {
-        ConfigSystem.storeConfigurable(modulesConfigurable)
+    /**
+     * Reconnects to the last server with a random account.
+     *
+     * This is safe to call from every thread since it records a render call and
+     * therefore runs in the Minecraft thread
+     */
+    fun reconnectWithRandomAccount() {
+        // todo: filter out favorite accounts
+        val account = AccountManager.accounts.filter { it is MicrosoftAccount || it is AlteningAccount }.randomOrNull()
+            ?: error("There are no accounts available")
+        AccountManager.loginDirectAccount(account)
+
+        reconnectNow()
     }
 
     /**
-     * Register inbuilt client modules
+     * Reconnects to the last server with a random cracked username.
+     *
+     * This is safe to call from every thread since it records a render call and
+     * therefore runs in the Minecraft thread
      */
-    fun registerInbuilt() {
-        val builtin = arrayOf(
-            // Combat
-            ModuleAimbot,
-            ModuleAutoArmor,
-            ModuleAutoBow,
-            ModuleAutoClicker,
-            ModuleAutoGapple,
-            ModuleAutoLeave,
-            ModuleAutoPot,
-            ModuleAutoSoup,
-            ModuleAutoHead,
-            ModuleAutoWeapon,
-            ModuleFakeLag,
-            ModuleCriticals,
-            ModuleHitbox,
-            ModuleKillAura,
-            ModuleSuperKnockback,
-            ModuleTimerRange,
-            ModuleVelocity,
-            ModuleBacktrack,
-            ModuleSwordBlock,
-            ModuleAutoShoot,
+    fun reconnectWithRandomUsername() {
+        // Random 7-16 character alphabetic username
+        // todo: make realistic usernames
+        val username = RandomStringUtils.randomAlphanumeric(7, 16)
 
-            // Exploit
-            ModuleAbortBreaking,
-            ModuleAntiReducedDebugInfo,
-            ModuleAntiVanish,
-            ModuleClip,
-            ModuleDamage,
-            ModuleDisabler,
-            ModuleForceUnicodeChat,
-            ModuleGhostHand,
-            ModuleKick,
-            ModuleMoreCarry,
-            ModuleNameCollector,
-            ModuleNoPitchLimit,
-            ModulePingSpoof,
-            ModulePlugins,
-            ModulePortalMenu,
-            ModuleResourceSpoof,
-            ModuleSleepWalker,
-            ModuleSpoofer,
-            ModuleVehicleOneHit,
-            ModuleServerCrasher,
-            ModuleSwingFix,
+        val account = CrackedAccount(username).also { it.refresh() }
+        AccountManager.loginDirectAccount(account)
 
-            // Fun
-            ModuleDankBobbing,
-            ModuleDerp,
-            ModuleSkinDerp,
-            ModuleHandDerp,
-
-            // Misc
-            ModuleAntiBot,
-            ModuleFriendClicker,
-            ModuleKeepChatAfterDeath,
-            ModuleNameProtect,
-            ModuleNotifier,
-            ModuleSpammer,
-            ModuleAutoAccount,
-            ModuleTeams,
-            ModuleAutoChatGame,
-            ModuleDebugRecorder,
-            ModuleFocus,
-            ModuleAntiStaff,
-
-            // Movement
-            ModuleAirJump,
-            ModuleAntiLevitation,
-            ModuleAutoDodge,
-            ModuleAvoidHazards,
-            ModuleBlockBounce,
-            ModuleBlockWalk,
-            ModuleBugUp,
-            ModuleElytraFly,
-            ModuleFly,
-            ModuleFreeze,
-            ModuleHighJump,
-            ModuleInventoryMove,
-            ModuleLiquidWalk,
-            ModuleLongJump,
-            ModuleNoClip,
-            ModuleNoJumpDelay,
-            ModuleNoPush,
-            ModuleNoSlow,
-            ModuleNoWeb,
-            ModuleParkour,
-            ModulePerfectHorseJump,
-            ModuleSafeWalk,
-            ModuleSneak,
-            ModuleSpeed,
-            ModuleSprint,
-            ModuleStep,
-            ModuleReverseStep,
-            ModuleStrafe,
-            ModuleTerrainSpeed,
-            ModuleVehicleControl,
-
-            // Player
-            ModuleAntiAFK,
-            ModuleAntiExploit,
-            ModuleAutoBreak,
-            ModuleAutoFish,
-            ModuleAutoRespawn,
-            ModuleAutoTotem,
-            ModuleAutoWalk,
-            ModuleBlink,
-            ModuleChestStealer,
-            ModuleEagle,
-            ModuleFastUse,
-            ModuleInventoryCleaner,
-            ModuleNoFall,
-            ModuleNoRotateSet,
-            ModuleReach,
-            ModuleRegen,
-            ModuleZoot,
-            ModuleAutoPlay,
-
-            // Render
-            ModuleAnimation,
-            ModuleAntiBlind,
-            ModuleBlockESP,
-            ModuleBreadcrumbs,
-            ModuleCameraClip,
-            ModuleClickGui,
-            ModuleESP,
-            ModuleFreeCam,
-            ModuleFullBright,
-            ModuleHoleESP,
-            ModuleHud,
-            ModuleItemESP,
-            ModuleJumpEffect,
-            ModuleMobOwners,
-            ModuleMurderMystery,
-            ModuleAttackEffects,
-            ModuleNametags,
-            ModuleCombineMobs,
-
-            // ModuleNametags,
-            ModuleNoBob,
-            ModuleNoFov,
-            ModuleNoHurtCam,
-            ModuleNoSignRender,
-            ModuleNoSwing,
-            ModuleOverrideTime,
-            ModuleOverrideWeather,
-            ModuleQuickPerspectiveSwap,
-            ModuleRotations,
-            ModuleStorageESP,
-            ModuleTracers,
-            ModuleTrajectories,
-            ModuleTrueSight,
-            ModuleXRay,
-            ModuleDebug,
-            ModuleMinimap,
-            ModuleScoreboard,
-
-            // World
-            ModuleAutoDisable,
-            ModuleAutoFarm,
-            ModuleAutoTool,
-            ModuleChestAura,
-            ModuleCrystalAura,
-            ModuleFastBreak,
-            ModuleFastPlace,
-            ModuleFucker,
-            ModuleIgnite,
-            ModuleNoSlowBreak,
-            ModuleProjectilePuncher,
-            ModuleScaffold,
-            ModuleTimer,
-            ModuleNuker,
-
-            // Client
-            ModuleAutoConfig,
-            ModuleRichPresence,
-            ModuleCapeTransfer,
-            ModuleHideClient,
-            ModuleEnemies,
-            ModuleLiquidChat
-        )
-
-        builtin.apply {
-            sortBy { it.name }
-            forEach(::addModule)
-        }
+        reconnectNow()
     }
-
-    fun addModule(module: Module) {
-        module.initConfigurable()
-        module.init()
-        modules += module
-    }
-
-    fun removeModule(module: Module) {
-        if (module.enabled) {
-            module.disable()
-        }
-        module.unregister()
-        modules -= module
-    }
-
-    /**
-     * Allow `ModuleManager += Module` syntax
-     */
-    operator fun plusAssign(module: Module) {
-        addModule(module)
-    }
-
-    operator fun plusAssign(modules: MutableList<Module>) {
-        modules.forEach(this::addModule)
-    }
-
-    operator fun minusAssign(module: Module) {
-        removeModule(module)
-    }
-
-    operator fun minusAssign(modules: MutableList<Module>) {
-        modules.forEach(this::removeModule)
-    }
-
-    fun autoComplete(begin: String, args: List<String>, validator: (Module) -> Boolean = { true }): List<String> {
-        return filter { it.name.startsWith(begin, true) && validator(it) }.map { it.name }
-    }
-
-    /**
-     * This is being used by UltralightJS for the implementation of the ClickGUI. DO NOT REMOVE!
-     */
-    @JvmName("getCategories")
-    @ScriptApi
-    fun getCategories() = Category.values().map { it.readableName }.toTypedArray()
-
-    @JvmName("getModuleByName")
-    @ScriptApi
-    fun getModuleByName(module: String) = find { it.name.equals(module, true) }
-
-    operator fun get(moduleName: String) = modules.find { it.name.equals(moduleName, true) }
 
 }
